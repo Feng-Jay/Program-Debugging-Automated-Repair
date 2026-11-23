@@ -142,43 +142,48 @@ python3 lab.py selftest
 
 ## 环境配置
 
-需要 **Python 3.10+** 和支持 **C++17** 的 Clang 或 GCC。
+本项目需要：
 
-脚本依次查找 `clang++`、`g++`、`clang`，也可以通过 `APR_CXX` 环境变量指定编译器。
+- **Python 3.10+**
+- **支持 C++17 的编译器**：Clang (`clang++`) 或 GCC (`g++`)，任选其一
+
+脚本会优先使用 `clang++`，其次使用 `g++`。也可以通过环境变量 `APR_CXX` 指定编译器。
 
 <details>
-<summary><strong>macOS</strong></summary>
+<summary>macOS</summary>
 
-推荐使用 Xcode Command Line Tools：
+推荐安装 Xcode Command Line Tools，其中包含 `clang++`：
 
 ```bash
 xcode-select --install
 ```
 
-也可以使用 Homebrew：
+如果需要安装 Python，可以使用 Homebrew：
 
 ```bash
-brew install python llvm
+brew install python
 ```
 
-若需要使用 Homebrew 安装的 LLVM：
+也可以选择通过 Homebrew 安装 GCC 或 LLVM：
 
 ```bash
-export PATH="$(brew --prefix llvm)/bin:$PATH"
+brew install gcc
+# 或
+brew install llvm
 ```
 
-如果使用 Homebrew 的 GCC，编译器名称通常带有版本号（如 `g++-15`），可以通过环境变量指定：
+Homebrew 安装的 GCC 通常带有版本号（如 `g++-15`），可以通过 `APR_CXX` 指定：
 
 ```bash
 export APR_CXX=g++-15
 ```
 
-如果已经安装 Xcode 命令行工具，直接使用系统的 `clang++` 即可。
+如果已经安装 Xcode Command Line Tools，无需额外安装编译器。
 
 </details>
 
 <details>
-<summary><strong>Linux（Ubuntu / Debian / Fedora / Arch）</strong></summary>
+<summary>Linux</summary>
 
 **Ubuntu / Debian**
 
@@ -187,11 +192,15 @@ sudo apt update
 sudo apt install python3 python3-venv python3-pip g++
 ```
 
+也可以将 `g++` 替换为 `clang`。
+
 **Fedora**
 
 ```bash
 sudo dnf install python3 python3-pip gcc-c++
 ```
+
+也可以将 `gcc-c++` 替换为 `clang`。
 
 **Arch Linux**
 
@@ -199,43 +208,38 @@ sudo dnf install python3 python3-pip gcc-c++
 sudo pacman -S python gcc
 ```
 
-也可以安装对应发行版的 Clang 编译器。
+也可以将 `gcc` 替换为 `clang`。
 
 </details>
 
 <details>
-<summary><strong>Windows</strong></summary>
+<summary>Windows</summary>
 
-推荐通过 [WSL](https://learn.microsoft.com/windows/wsl/install) 运行本项目，安装后按照 Linux 部分配置即可。
+推荐使用 [WSL](https://learn.microsoft.com/windows/wsl/install)，安装后按照 Linux 部分配置环境。
 
-也可以使用原生 Windows 环境：
+也可以使用原生 Windows 环境，安装 Python 和以下任意一种编译器：
+
+- [LLVM](https://releases.llvm.org/)：提供 `clang++`
+- [WinLibs](https://winlibs.com/)：提供 `g++`
+
+例如，使用 winget：
 
 ```powershell
 winget install Python.Python.3.12
 winget install LLVM.LLVM
 ```
 
-安装完成后重新打开终端，确认 `clang++` 可用。如果找不到编译器，需要将 `C:\Program Files\LLVM\bin` 加入 PATH。
-
-**Python 虚拟环境（PowerShell）**
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-在 Windows 上，可以将后续命令中的 `python3` 替换成 `py -3`。
+安装完成后重新打开终端，确认编译器已加入 PATH。
 
 > [!NOTE]
-> 本项目使用 `-fsanitize=undefined` 进行运行时检查。Windows 原生 LLVM 环境需要确认相应 Sanitizer 的可用性；如遇兼容性问题，建议使用 WSL。
+> 项目使用 `-fsanitize=undefined` 检查运行时错误。该功能在 Windows 原生工具链上的支持可能有所不同。如果遇到兼容性问题，建议使用 WSL。
 
 </details>
 
 <details>
-<summary><strong>安装 Python 依赖</strong></summary>
+<summary>Python 依赖安装</summary>
 
-macOS / Linux：
+**macOS / Linux**
 
 ```bash
 python3 -m venv .venv
@@ -243,13 +247,25 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-仅运行案例测试（`python3 -m cases`）无需额外 Python 依赖。
+**Windows（PowerShell）**
 
-使用 `lab.py` 中的 AST 分析、补丁生成和自动修复功能时，需要安装 `requirements.txt` 中的依赖。
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
 
-测试程序采用 C++17 编译，并启用 `-fsanitize=undefined`。
+仅运行案例测试（`python3 -m cases`）不需要额外的 Python 依赖。使用 `lab.py` 中的 AST 分析和自动修复功能时，需要安装 `requirements.txt` 中的依赖。
 
 </details>
+
+安装后，可以检查环境：
+
+```bash
+python3 --version
+clang++ --version   # 使用 Clang 时
+g++ --version       # 使用 GCC 时
+```
 
 ## 项目结构
 
