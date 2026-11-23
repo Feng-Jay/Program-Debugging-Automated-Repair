@@ -41,7 +41,7 @@ python3 lab.py search cutoff
 
 `median` 和 `scheme` 的许可信息分别见 `cases/median/INTROCLASS-LICENSE.txt` 和 `cases/scheme/CONDEFECTS-LICENSE.txt`。
 
-\<details> \<summary>查看其他案例的测试命令\</summary>
+<details> <summary>查看其他案例的测试命令</summary>
 
 ```bash
 # Median
@@ -75,7 +75,7 @@ python3 -m cases test cutoff --few my_cutoff.cpp
 
 对于 `cutoff`，该测试集不包含触发缺陷的 60 分输入。`scheme`、`npd` 和 `oob` 同样支持 `--few` 参数。
 
-\</details>
+</details>
 
 ## 自动修复实验
 
@@ -93,7 +93,7 @@ python3 -m cases test cutoff --few my_cutoff.cpp
 > [!NOTE]
 > 这些脚本是教学用途的简化实现，并非 GenProg、TBar、SemFix 等工具的完整复现。方法原理及研究工具见 [METHODS.md](METHODS.md)。
 
-\<details> \<summary>运行说明、日志与可视化\</summary>
+<details> <summary>运行说明、日志与可视化</summary>
 
 - **案例范围**：支持 `median`、`scheme`、`npd`、`oob` 和 `cutoff`，但不同方法不一定能成功修复所有缺陷。
 - **搜索空间**：当前搜索策略主要复用程序中已有的运算符、变量和语句，对需要新增分支或字符串的缺陷可能无法生成正确补丁。
@@ -101,9 +101,9 @@ python3 -m cases test cutoff --few my_cutoff.cpp
 - **AST 可视化**：生成 `.dot` 文件；安装 Graphviz 后可额外生成 `.svg` 文件。
 - **源码保护**：编译和测试均在临时目录中完成，不修改 `cases/` 下的原始文件。
 
-\</details>
+</details>
 
-\<details> \<summary>使用 DeepSeek 或其他编程助手\</summary>
+<details> <summary>使用 DeepSeek 或其他编程助手</summary>
 
 `prompt` 命令只生成修复提示词，不发送 API 请求，可将结果用于 Copilot、Cursor、TRAE 等工具。
 
@@ -118,7 +118,7 @@ python3 lab.py llm cutoff
 
 其他编程助手的使用说明见 [TOOLS.md](TOOLS.md)。
 
-\</details>
+</details>
 
 ## 实践任务
 
@@ -146,8 +146,8 @@ python3 lab.py selftest
 
 脚本依次查找 `clang++`、`g++`、`clang`，也可以通过 `APR_CXX` 环境变量指定编译器。
 
-\<details>
-\<summary>\<strong>macOS\</strong>\</summary>
+<details>
+<summary><strong>macOS</strong></summary>
 
 推荐使用 Xcode Command Line Tools：
 
@@ -175,10 +175,10 @@ export APR_CXX=g++-15
 
 如果已经安装 Xcode 命令行工具，直接使用系统的 `clang++` 即可。
 
-\</details>
+</details>
 
-\<details>
-\<summary>\<strong>Linux（Ubuntu / Debian / Fedora / Arch）\</strong>\</summary>
+<details>
+<summary><strong>Linux（Ubuntu / Debian / Fedora / Arch）</strong></summary>
 
 **Ubuntu / Debian**
 
@@ -201,10 +201,10 @@ sudo pacman -S python gcc
 
 也可以安装对应发行版的 Clang 编译器。
 
-\</details>
+</details>
 
-\<details>
-\<summary>\<strong>Windows\</strong>\</summary>
+<details>
+<summary><strong>Windows</strong></summary>
 
 推荐通过 [WSL](https://learn.microsoft.com/windows/wsl/install) 运行本项目，安装后按照 Linux 部分配置即可。
 
@@ -230,10 +230,10 @@ python -m pip install -r requirements.txt
 > [!NOTE]
 > 本项目使用 `-fsanitize=undefined` 进行运行时检查。Windows 原生 LLVM 环境需要确认相应 Sanitizer 的可用性；如遇兼容性问题，建议使用 WSL。
 
-\</details>
+</details>
 
-\<details>
-\<summary>\<strong>安装 Python 依赖\</strong>\</summary>
+<details>
+<summary><strong>安装 Python 依赖</strong></summary>
 
 macOS / Linux：
 
@@ -249,12 +249,12 @@ python3 -m pip install -r requirements.txt
 
 测试程序采用 C++17 编译，并启用 `-fsanitize=undefined`。
 
-\</details>
+</details>
 
 ## 项目结构
 
-\<details>
-\<summary>展开目录结构\</summary>
+<details>
+<summary>展开目录结构</summary>
 
 ```text
 apr-course/
@@ -271,4 +271,4 @@ apr-course/
 └── TOOLS.md               # 编程助手使用说明
 ```
 
-\</details>
+</details>
