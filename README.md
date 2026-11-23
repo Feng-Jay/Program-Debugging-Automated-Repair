@@ -97,6 +97,7 @@ python3 -m cases test cutoff --few my_cutoff.cpp
 
 - **案例范围**：支持 `median`、`scheme`、`npd`、`oob` 和 `cutoff`，但不同方法不一定能成功修复所有缺陷。
 - **搜索空间**：当前搜索策略主要复用程序中已有的运算符、变量和语句，对需要新增分支或字符串的缺陷可能无法生成正确补丁。
+- **定位结果**：`search`、`template`、`synth`、`prompt`、`llm` 可以用 `--loc 文件` 指定可疑行，只改这些行。文件里一行一个行号，越靠前越优先；也可以在行号后写可疑度，例如 `12 0.9`。不提供时会尝试程序中所有可修改的位置。
 - **实验日志**：保存于 `logs/<method>-<case>.log`，例如 `logs/search-cutoff.log`。
 - **AST 可视化**：生成 `.dot` 文件；安装 Graphviz 后可额外生成 `.svg` 文件。
 - **源码保护**：编译和测试均在临时目录中完成，不修改 `cases/` 下的原始文件。
@@ -122,6 +123,8 @@ python3 lab.py llm cutoff
 
 ## 实践任务
 
+### 必做任务
+
 针对提供的 5 个缺陷案例，阅读题目描述及缺陷代码，完成以下任务：
 
 - [ ] **缺陷复现**：运行测试用例，观察失败结果并分析缺陷原因。
@@ -133,6 +136,30 @@ python3 lab.py llm cutoff
 > 测试通过不代表补丁一定正确。除了现有测试，还应结合题目要求检查程序语义，必要时补充边界测试。
 
 建议记录各案例的修复方法、补丁、测试结果和失败原因，作为实验分析的依据。
+
+### ✨Bonus任务：真实缺陷修复
+
+选择一个自己日常编程中遇到的、印象较深的 Bug，或从[TJU-OJ平台](https://acm.tju.edu.cn/home) 平台的历史提交中选择一个自己未通过的程序
+
+<details> <summary>使用以下 AI 编程工具辅助定位和修复程序缺陷：</summary>
+
+- **[TRAE](https://docs.trae.cn/ide_get-started-with-trae)**：AI 编程 IDE，支持通过自然语言分析和修改代码。
+- **[Qoder CN](https://docs.qoder.cn/getting-started/qodercn-ide-get-started)**：支持代码理解、缺陷定位与 Agent 自动修复。
+- **[GitHub Copilot](https://docs.github.com/zh/copilot/get-started/quickstart-for-using-github-copilot-in-your-ide)**：可集成到 VS Code 等 IDE，辅助代码分析和修改。
+- **[Cursor](https://cursor.com/docs/get-started/quickstart)**：AI 代码编辑器，支持通过 Agent 完成代码修改与调试。
+
+以上链接均为官方入门文档，同学们可根据个人习惯任选一种工具完成 Bonus 任务。
+</details>
+
+完成以下内容：
+
+- [ ] **缺陷分析**：描述程序的预期行为、实际错误及触发条件。
+
+- [ ] **工具修复**：使用至少一种编程助手尝试修复，记录使用的提示词及生成的补丁。
+
+- [ ] **结果验证**：重新运行测试或提交至 OJ 平台，检查修复结果。
+
+- [ ] **简要总结**：分析工具是否成功定位并修复缺陷，以及修复过程中存在的问题。
 
 运行仓库自检：
 

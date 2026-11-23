@@ -15,6 +15,7 @@ import unittest
 from cases import ALL
 from cases.command import run as case_command
 from methods import astview, model, search, synth, template
+from utils.localize import load_localization
 
 
 def _assert_methods_are_general() -> None:
@@ -119,8 +120,12 @@ def main() -> int:
     ])
     parser.add_argument("case", nargs="?", choices=list(ALL), default="cutoff")
     parser.add_argument("--source", type=Path, help="verify 时指定自己的 C 补丁（不覆盖原始文件）")
+    parser.add_argument("--loc", type=Path, help="定位结果。每行一个行号，可选可疑度；靠前的行优先")
     args = parser.parse_args()
     try:
+        loc = load_localization(args.loc) if args.loc else None
+        if loc is not None and args.action not in {"template", "search", "synth", "prompt", "llm"}:
+            raise ValueError("--loc 只用于 search、template、synth、prompt、llm")
         if args.action == "list":
             return case_command(["list"])
         if args.action == "selftest":
@@ -131,15 +136,15 @@ def main() -> int:
         if args.action == "ast":
             return 0 if astview.run(args.case) else 1
         if args.action == "template":
-            return 0 if template.run(args.case) else 1
+            return 0 if template.run(args.case, loc=loc) else 1
         if args.action == "search":
-            return 0 if search.run(args.case) else 1
+            return 0 if search.run(args.case, loc=loc) else 1
         if args.action == "synth":
-            return 0 if synth.run(args.case) else 1
+            return 0 if synth.run(args.case, loc=loc) else 1
         if args.action == "prompt":
-            return 0 if model.show(args.case) else 1
+            return 0 if model.show(args.case, loc=loc) else 1
         if args.action == "llm":
-            return 0 if model.run(args.case) else 1
+            return 0 if model.run(args.case, loc=loc) else 1
     except (RuntimeError, subprocess.TimeoutExpired, OSError, ValueError) as exc:
         print(f"错误：{exc}", file=sys.stderr)
         return 1

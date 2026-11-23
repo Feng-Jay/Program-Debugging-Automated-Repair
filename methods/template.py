@@ -14,26 +14,30 @@ from __future__ import annotations
 from cases import ALL
 from utils.astutil import COMPARE_OPS, SourceTree, function_name, line_number, one_line, unique_texts
 from utils.evaluate import expected_strings
+from utils.localize import Localization, priority, selected
 from utils.runlog import start_log, try_candidates
 from utils.snippet import guard_block
 
 
-def relop_template(tree: SourceTree) -> list[tuple[str, str]]:
+def relop_template(tree: SourceTree, loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """每处比较运算换成其余比较符。和 search 的比较符替换是同一种编辑。"""
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     for function in tree.functions():
         for op in tree.compare_ops(function):
+            if not selected(loc, tree, op.operator_start, op.operator_end):
+                continue
+            rank = priority(loc, tree, op.operator_start, op.operator_end)
             for new_op in COMPARE_OPS:
                 if new_op == op.operator:
                     continue
                 code = tree.replace(op.operator_start, op.operator_end, new_op)
-                candidates.append((f"模板[关系运算] {op.operator} → {new_op}（在 {op.text}）", code))
+                candidates.append((rank, f"模板[关系运算] {op.operator} → {new_op}（在 {op.text}）", code))
     return candidates
 
 
-def null_check_template(tree: SourceTree, messages: list[str]) -> list[tuple[str, str]]:
+def null_check_template(tree: SourceTree, messages: list[str], loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """在使用指针的语句前插入 if (p == nullptr) 或 if (!p)。"""
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     returns = ("0", "1", "2")
     bodies: list[tuple[str, str | None, str]] = []
     for message in messages:
@@ -43,6 +47,9 @@ def null_check_template(tree: SourceTree, messages: list[str]) -> list[tuple[str
         bodies.append((f"仅 return {ret}", None, ret))
     for function in tree.functions():
         for use in tree.pointer_uses(function):
+            if not selected(loc, tree, use.statement_start, use.statement_end):
+                continue
+            rank = priority(loc, tree, use.statement_start, use.statement_end)
             indent = tree.line_indent(use.statement_start)
             # 语句前如果已经有检查，仍然生成。过不过交给测试。
             for condition in (f"{use.pointer} == nullptr", f"!{use.pointer}"):
@@ -55,14 +62,14 @@ def null_check_template(tree: SourceTree, messages: list[str]) -> list[tuple[str
                     )
                     code = tree.replace(use.statement_start, use.statement_start, block)
                     candidates.append(
-                        (f"模板[空指针检查] 在使用 {use.pointer}{use.kind} 前：if ({condition}) / {title}", code)
+                        (rank, f"模板[空指针检查] 在使用 {use.pointer}{use.kind} 前：if ({condition}) / {title}", code)
                     )
     return candidates
 
 
-def missing_else_template(tree: SourceTree, messages: list[str]) -> list[tuple[str, str]]:
+def missing_else_template(tree: SourceTree, messages: list[str], loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """给没有 else 的 if 接上一个 else 分支。"""
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     payloads: list[tuple[str, str | None, str]] = []
     for message in messages:
         payloads.append((f"输出 {message!r} 并返回", message, "0"))
@@ -72,6 +79,9 @@ def missing_else_template(tree: SourceTree, messages: list[str]) -> list[tuple[s
         for if_node in tree.if_statements(function):
             if if_node.has_else:
                 continue
+            if not selected(loc, tree, if_node.start, if_node.end):
+                continue
+            rank = priority(loc, tree, if_node.start, if_node.end)
             indent = tree.line_indent(if_node.start)
             for title, message, ret in payloads:
                 else_block = " else " + guard_block(indent, message, ret).lstrip()
@@ -79,41 +89,58 @@ def missing_else_template(tree: SourceTree, messages: list[str]) -> list[tuple[s
                 cond = " ".join(if_node.condition.split())
                 if len(cond) > 40:
                     cond = cond[:39] + "…"
-                candidates.append((f"模板[补 else] 接在 if ({cond}) 后：{title}", code))
+                candidates.append((rank, f"模板[补 else] 接在 if ({cond}) 后：{title}", code))
     return candidates
 
 
-def candidates_for(source_text: str, messages: list[str]) -> list[tuple[str, str]]:
+def _order(items: list[tuple[float, str, str]]) -> list[tuple[str, str]]:
+    items.sort(key=lambda item: item[0], reverse=True)
+    return unique_texts([(label, code) for _, label, code in items])
+
+
+def candidates_for(source_text: str, messages: list[str], loc: Localization | None = None) -> list[tuple[str, str]]:
     """先生成会插入新语句的模板，再换比较符，方便先看到结构上的修改。"""
     tree = SourceTree(source_text)
-    items: list[tuple[str, str]] = []
-    items.extend(null_check_template(tree, messages))
-    items.extend(missing_else_template(tree, messages))
-    items.extend(relop_template(tree))
-    return unique_texts(items)
+    items: list[tuple[float, str, str]] = []
+    items.extend(null_check_template(tree, messages, loc))
+    items.extend(missing_else_template(tree, messages, loc))
+    items.extend(relop_template(tree, loc))
+    return _order(items)
 
 
-def describe_matches(tree: SourceTree) -> list[str]:
+def describe_matches(tree: SourceTree, loc: Localization | None = None) -> list[str]:
     """列出每条模板匹配到第几行，先不展开成全部补丁。"""
     rows: list[str] = []
     for function in tree.functions():
         name = function_name(tree, function)
         for op in tree.compare_ops(function):
+            if not selected(loc, tree, op.operator_start, op.operator_end):
+                continue
             line = line_number(tree, op.operator_start)
             rows.append(f"关系运算  {name} 第{line}行  {one_line(op.text, 48)}  里的 {op.operator}")
         for use in tree.pointer_uses(function):
+            if not selected(loc, tree, use.statement_start, use.statement_end):
+                continue
             line = line_number(tree, use.statement_start)
             stmt = one_line(tree.raw[use.statement_start:use.statement_end].decode("utf-8"), 48)
             rows.append(f"空指针检查  {name} 第{line}行  使用 {use.pointer}{use.kind}  的语句：{stmt}")
         for if_node in tree.if_statements(function):
             if if_node.has_else:
                 continue
+            if not selected(loc, tree, if_node.start, if_node.end):
+                continue
             line = line_number(tree, if_node.start)
             rows.append(f"补 else  {name} 第{line}行  if ({one_line(if_node.condition, 48)}) 没有 else")
     return rows
 
 
-def run(case_name: str = "median", *, limit: int | None = 160, stop_on_fix: bool = False) -> bool:
+def run(
+    case_name: str = "median",
+    *,
+    limit: int | None = 160,
+    stop_on_fix: bool = False,
+    loc: Localization | None = None,
+) -> bool:
     """先说明匹配到哪里，再逐个套用模板并测试。"""
     if case_name not in ALL:
         raise ValueError(f"未知案例：{case_name}")
@@ -123,10 +150,14 @@ def run(case_name: str = "median", *, limit: int | None = 160, stop_on_fix: bool
     try:
         tree = SourceTree(original)
         messages = expected_strings(case_name)
-        matches = describe_matches(tree)
-        all_items = candidates_for(original, messages)
+        matches = describe_matches(tree, loc)
+        all_items = candidates_for(original, messages, loc)
         items = all_items[:limit] if limit is not None else all_items
         log.emit("模板：换关系符、指针前加空检查、给没有 else 的 if 补分支。")
+        if loc is None:
+            log.emit("没有定位结果，匹配到的位置都会试。")
+        else:
+            log.emit(f"定位：{loc.summary()}")
         log.emit("打印的文字用这个案例测试里的期望输出。")
         if messages:
             log.emit("期望：" + "、".join(repr(item) for item in messages))

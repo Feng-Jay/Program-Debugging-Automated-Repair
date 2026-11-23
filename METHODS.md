@@ -8,9 +8,9 @@
 
 限定几种编辑（删、插、换语句），在这些改法里找能通过测试的。GenProg 用遗传算法改 C 程序，常假设修复要用的语句已经出现在程序里。
 
-课堂命令：`python3 lab.py ast cutoff` 画出语法树，节点是行号和代码，图片在 `logs/ast-cutoff.svg`。`python3 lab.py search cutoff`（也可换成 `oob`、`scheme`、`median`）先列出要改的位置，再对每个补丁打印 diff 并测试。日志在 `logs/search-<案例>.log`。
+课堂命令：`python3 lab.py ast cutoff` 画出语法树，节点是行号和代码，图片在 `logs/ast-cutoff.svg`。`python3 lab.py search cutoff --loc suspicious.txt`（也可换成 `oob`、`scheme`、`median`）先列出要改的位置，再对每个补丁打印 diff 并测试。日志在 `logs/search-<案例>.log`。
 
-这里的脚本没有遗传算法、种群、交叉和故障定位，用的也不是 GenProg 的 CIL。`npd` 需要新的判断，只复用已有语句时经常找不到。
+这里的脚本没有遗传算法、种群、交叉，用的也不是 GenProg 的 CIL。它不计算可疑行，但可以用 `--loc` 读入定位结果，只改列出的行。`npd` 需要新的判断，只复用已有语句时经常找不到。
 
 原项目：[squaresLab/genprog-code](https://github.com/squaresLab/genprog-code)（C，还要 OCaml 工具链）。
 

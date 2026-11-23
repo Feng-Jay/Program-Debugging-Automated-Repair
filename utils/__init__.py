@@ -4,4 +4,5 @@
   snippet.py    拼一段插入用的 C++，template 和 synth 共用
   evaluate.py   调用 cases test，看补丁过不过
   runlog.py     把过程打印出来，保存到 logs/，并逐个测试补丁
+  localize.py   读入定位结果，只保留要改的行
 """

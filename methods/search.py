@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from cases import ALL
 from utils.astutil import COMPARE_OPS, ROLE_TEXT, SourceTree, function_name, line_number, one_line, unique_texts
+from utils.localize import Localization, priority, selected
 from utils.runlog import start_log, try_candidates
 
 
@@ -24,35 +25,41 @@ def _functions(tree: SourceTree):
     return functions
 
 
-def op_replacements(tree: SourceTree) -> list[tuple[str, str]]:
+def op_replacements(tree: SourceTree, loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """每处比较运算换成其余比较符，一次只换一个运算符。"""
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     for function in _functions(tree):
         for op in tree.compare_ops(function):
+            if not selected(loc, tree, op.operator_start, op.operator_end):
+                continue
+            rank = priority(loc, tree, op.operator_start, op.operator_end)
             for new_op in COMPARE_OPS:
                 if new_op == op.operator:
                     continue
                 code = tree.replace(op.operator_start, op.operator_end, new_op)
                 label = f"比较运算: {op.text} 中的 {op.operator} → {new_op}"
-                candidates.append((label, code))
+                candidates.append((rank, label, code))
     return candidates
 
 
-def var_replacements(tree: SourceTree) -> list[tuple[str, str]]:
+def var_replacements(tree: SourceTree, loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """每个局部变量的使用处，换成同一函数里声明的另一个名字。"""
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     # 赋值右边和条件里的名字更常是写错的那一个，所以排在前面。
     role_rank = {"assignment_rhs": 0, "condition": 1, "other": 2}
     for function in _functions(tree):
         declared = tree.declared_names(function)
         uses = sorted(tree.identifier_uses(function), key=lambda use: (role_rank.get(use.role, 9), use.start))
         for use in uses:
+            if not selected(loc, tree, use.start, use.end):
+                continue
+            rank = priority(loc, tree, use.start, use.end)
             for other in declared:
                 if other == use.name:
                     continue
                 code = tree.replace(use.start, use.end, other)
                 label = f"变量替换: {use.name} → {other}（{use.role}）"
-                candidates.append((label, code))
+                candidates.append((rank, label, code))
     return candidates
 
 
@@ -62,30 +69,40 @@ def _simple_statements(tree: SourceTree, function):
     return [s for s in stmts if s.type in {"expression_statement", "return_statement"}]
 
 
-def statement_edits(tree: SourceTree) -> list[tuple[str, str]]:
+def statement_edits(tree: SourceTree, loc: Localization | None = None) -> list[tuple[float, str, str]]:
     """用函数里已有的语句做删除、替换和插入。
 
     单独的 return 0 不删除，避免把函数收尾删掉；它仍可以拿去替换或插入。
+    材料可以来自整个函数，但被改的那条语句必须落在定位结果里。
     """
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[float, str, str]] = []
     for function in _functions(tree):
         simple = _simple_statements(tree, function)
         for stmt in simple:
             stripped = stmt.text.strip()
             if stripped in {"return 0;", "return;"}:
                 continue
+            if not selected(loc, tree, stmt.start, stmt.end):
+                continue
             code = _delete_statement(tree, stmt.start, stmt.end)
             if code != tree.text:
-                candidates.append((f"删除语句: { one_line(stmt.text, 40) }", code))
+                rank = priority(loc, tree, stmt.start, stmt.end)
+                candidates.append((rank, f"删除语句: { one_line(stmt.text, 40) }", code))
         for target in simple:
+            if not selected(loc, tree, target.start, target.end):
+                continue
+            rank = priority(loc, tree, target.start, target.end)
             for donor in simple:
                 if donor.span == target.span or donor.text == target.text:
                     continue
                 code = tree.replace(target.start, target.end, donor.text)
                 candidates.append(
-                    (f"替换语句: { one_line(target.text, 40) } ← { one_line(donor.text, 40) }", code)
+                    (rank, f"替换语句: { one_line(target.text, 40) } ← { one_line(donor.text, 40) }", code)
                 )
         for target in simple:
+            if not selected(loc, tree, target.start, target.end):
+                continue
+            rank = priority(loc, tree, target.start, target.end)
             indent = tree.line_indent(target.start)
             for donor in simple:
                 if donor.span == target.span:
@@ -97,7 +114,7 @@ def statement_edits(tree: SourceTree) -> list[tuple[str, str]]:
                     insertion = insertion + indent
                 code = tree.replace(target.start, target.start, insertion)
                 candidates.append(
-                    (f"插入语句: 在 { one_line(target.text, 40) } 前插入 { one_line(donor.text, 40) }", code)
+                    (rank, f"插入语句: 在 { one_line(target.text, 40) } 前插入 { one_line(donor.text, 40) }", code)
                 )
     return candidates
 
@@ -110,30 +127,47 @@ def _delete_statement(tree: SourceTree, start: int, end: int) -> str:
     return tree.replace(start, raw_end, "")
 
 
-def candidates_for(source_text: str, *, include_statements: bool = True) -> list[tuple[str, str]]:
+def _order(items: list[tuple[float, str, str]]) -> list[tuple[str, str]]:
+    """可疑度高的排在前面。没给定位结果时可疑度都是 0，顺序和生成时一样。"""
+    items.sort(key=lambda item: item[0], reverse=True)
+    return unique_texts([(label, code) for _, label, code in items])
+
+
+def candidates_for(
+    source_text: str,
+    *,
+    include_statements: bool = True,
+    loc: Localization | None = None,
+) -> list[tuple[str, str]]:
     """按比较符、变量、语句的顺序生成补丁，并去掉重复源码。"""
     tree = SourceTree(source_text)
-    items: list[tuple[str, str]] = []
-    items.extend(op_replacements(tree))
-    items.extend(var_replacements(tree))
+    items: list[tuple[float, str, str]] = []
+    items.extend(op_replacements(tree, loc))
+    items.extend(var_replacements(tree, loc))
     if include_statements:
-        items.extend(statement_edits(tree))
-    return unique_texts(items)
+        items.extend(statement_edits(tree, loc))
+    return _order(items)
 
 
-def describe_sites(tree: SourceTree) -> list[str]:
+def describe_sites(tree: SourceTree, loc: Localization | None = None) -> list[str]:
     """列出会改的位置。每个位置一行，先不展开成全部补丁。"""
     rows: list[str] = []
     for function in _functions(tree):
         name = function_name(tree, function)
         for op in tree.compare_ops(function):
+            if not selected(loc, tree, op.operator_start, op.operator_end):
+                continue
             line = line_number(tree, op.operator_start)
             rows.append(f"比较运算  {name} 第{line}行  {one_line(op.text, 48)}  里的 {op.operator}")
         for use in tree.identifier_uses(function):
+            if not selected(loc, tree, use.start, use.end):
+                continue
             line = line_number(tree, use.start)
             role = ROLE_TEXT.get(use.role, "其他位置")
             rows.append(f"局部变量  {name} 第{line}行  {use.name}（{role}）")
         for stmt in _simple_statements(tree, function):
+            if not selected(loc, tree, stmt.start, stmt.end):
+                continue
             line = line_number(tree, stmt.start)
             text = one_line(stmt.text, 48)
             if stmt.text.strip() in {"return 0;", "return;"}:
@@ -143,7 +177,13 @@ def describe_sites(tree: SourceTree) -> list[str]:
     return rows
 
 
-def run(case_name: str = "median", *, limit: int | None = 120, stop_on_fix: bool = False) -> bool:
+def run(
+    case_name: str = "median",
+    *,
+    limit: int | None = 120,
+    stop_on_fix: bool = False,
+    loc: Localization | None = None,
+) -> bool:
     """说明要改的位置，再逐个测试补丁。有补丁通过完整测试就返回 True。"""
     if case_name not in ALL:
         raise ValueError(f"未知案例：{case_name}")
@@ -152,11 +192,15 @@ def run(case_name: str = "median", *, limit: int | None = 120, stop_on_fix: bool
     log = start_log("search", case_name, case.SOURCE)
     try:
         tree = SourceTree(original)
-        all_items = candidates_for(original)
+        all_items = candidates_for(original, loc=loc)
         items = all_items[:limit] if limit is not None else all_items
         log.emit("每次只改一处：比较符、局部变量，或已有语句的删除、替换、插入。")
+        if loc is None:
+            log.emit("没有定位结果，程序里能改的位置都会试。")
+        else:
+            log.emit(f"定位：{loc.summary()}")
         log.emit("位置：")
-        sites = describe_sites(tree)
+        sites = describe_sites(tree, loc)
         if sites:
             for row in sites:
                 log.emit(f"  {row}")

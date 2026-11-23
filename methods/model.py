@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 from cases import ALL
+from utils.localize import Localization
 from utils.runlog import start_log
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
@@ -46,7 +47,7 @@ def credentials() -> dict | None:
     return None
 
 
-def prompt(case_name: str = "median") -> str:
+def prompt(case_name: str = "median", loc: Localization | None = None) -> str:
     if case_name not in ALL:
         raise ValueError(f"未知案例：{case_name}")
     case = ALL[case_name]
@@ -72,6 +73,10 @@ def prompt(case_name: str = "median") -> str:
     lines.append("")
     lines.append("已经能过的测试别改坏。")
     lines.append("")
+    if loc is not None:
+        lines.append("可疑位置，优先改这些行：")
+        lines.extend(f"- 第{number}行" for number, _ in loc.ranked)
+        lines.append("")
     lines.append("代码：")
     lines.append("```cpp")
     lines.append(code.rstrip())
@@ -80,20 +85,25 @@ def prompt(case_name: str = "median") -> str:
     return "\n".join(lines)
 
 
-def show(case_name: str = "median") -> bool:
+def show(case_name: str = "median", loc: Localization | None = None) -> bool:
     """打印并保存离线提示。不改程序，也不调用模型。"""
     if case_name not in ALL:
         raise ValueError(f"未知案例：{case_name}")
     case = ALL[case_name]
     log = start_log("prompt", case_name, case.SOURCE)
     try:
-        log.emit(prompt(case_name))
+        if loc is None:
+            log.emit("没有定位结果。")
+        else:
+            log.emit(f"定位：{loc.summary()}")
+        log.emit("")
+        log.emit(prompt(case_name, loc))
         return True
     finally:
         log.save()
 
 
-def run(case_name: str = "median") -> bool:
+def run(case_name: str = "median", loc: Localization | None = None) -> bool:
     """发起真实 API 调用。没有密钥时返回 False，并说明未验证。"""
     if case_name not in ALL:
         raise ValueError(f"未知案例：{case_name}")
@@ -102,6 +112,10 @@ def run(case_name: str = "median") -> bool:
     try:
         cfg = credentials()
         if cfg is None:
+            if loc is None:
+                log.emit("没有定位结果。")
+            else:
+                log.emit(f"定位：{loc.summary()}")
             log.emit("没有 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，没有发请求。")
             log.emit(f"提示在：python3 lab.py prompt {case_name}")
             log.emit(
@@ -109,10 +123,14 @@ def run(case_name: str = "median") -> bool:
                 f"python3 lab.py llm {case_name}"
             )
             return False
+        if loc is None:
+            log.emit("没有定位结果。")
+        else:
+            log.emit(f"定位：{loc.summary()}")
         log.emit(f"请求 {cfg['provider']} / {cfg['model']}")
         payload = json.dumps({
             "model": cfg["model"],
-            "messages": [{"role": "user", "content": prompt(case_name)}],
+            "messages": [{"role": "user", "content": prompt(case_name, loc)}],
             "temperature": 0,
             "stream": False,
         }).encode("utf-8")
